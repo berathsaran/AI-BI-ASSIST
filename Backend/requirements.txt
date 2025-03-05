@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+openai
+pandas
+xlrd  # For Excel files
+python-multipart  # For file uploads
