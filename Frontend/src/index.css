@@ -1,0 +1,38 @@
+/* index.css */
+:root {
+  --primary-color: #007BFF;
+  --error-color: #d32f2f;
+  --success-color: #2e7d32;
+  --background-color: #f9f9f9;
+  --text-color: #333;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  color: var(--text-color);
+  background-color: var(--background-color);
+}
+
+#root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Reset button styles for consistency */
+button {
+  font-family: inherit;
+}
+
+/* Accessibility: Focus styles */
+:focus {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
