@@ -1,269 +1,196 @@
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel
-import sqlite3
-import pandas as pd
-from fastapi.middleware.cors import CORSMiddleware
 import os
-import time
-from dotenv import load_dotenv
-import google.generativeai as genai
+import csv
 import json
-import re
-import charset_normalizer
+from flask import Flask, request, jsonify
+from flask_cors import CORS  # Import CORS
+from google.generativeai import GenerativeModel, configure
+from dotenv import load_dotenv
+from database import create_connection, insert_upload
+import sqlite3
 
-app = FastAPI()
+# Load environment variables
 load_dotenv()
-genai.configure(api_key=os.getenv("GOOGLE_API_KEY"))
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+configure(api_key=GEMINI_API_KEY)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})  # Allow requests from localhost:3000
+UPLOAD_FOLDER = "uploads"
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-class Query(BaseModel):
-    text: str
-
-def get_db_connection():
-    conn = sqlite3.connect("business_data.db", timeout=30)
-    conn.row_factory = sqlite3.Row
-    return conn
-
-def init_db():
-    """Initialize an empty database; schema will be set dynamically on upload."""
+# Helper function to extract data without pandas
+def extract_data(filepath, sample_size=1000):
     try:
-        with get_db_connection() as conn:
-            # Drop existing table to start fresh
-            conn.execute("DROP TABLE IF EXISTS business_data")
-            print("Dropped existing business_data table (if any).")
-            # Table will be created dynamically on upload
-            conn.commit()
-    except Exception as e:
-        print(f"Error initializing database: {str(e)}")
-        raise
-
-@app.on_event("startup")
-async def startup_event():
-    init_db()
-
-def fetch_dashboard_data(dashboard, limit=1000):
-    """Fetch and format data for a dashboard dynamically."""
-    x_col = dashboard["x"]
-    y_col = dashboard["y"]
-    # Check if columns exist in the table
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(business_data)")
-        columns = [row["name"] for row in cursor.fetchall()]
-        if x_col not in columns or y_col not in columns:
-            print(f"Invalid columns for dashboard: {x_col}, {y_col} not in {columns}")
-            return []
-
-    query = f"SELECT {x_col}, SUM({y_col}) as value FROM business_data GROUP BY {x_col} LIMIT {limit}"
-    try:
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(query)
-            results = [dict(row) for row in cursor.fetchall()]
-        data = [{"name": row[x_col], "value": row["value"]} for row in results]
-        print(f"Dashboard data for {dashboard['title']}: {data[:10]}... (limited to {limit})")
-        return data
-    except Exception as e:
-        print(f"Error fetching dashboard data: {str(e)}")
-        return []
-
-def detect_encoding(file_path):
-    """Detect the file's encoding."""
-    with open(file_path, 'rb') as f:
-        result = charset_normalizer.detect(f.read(10000))
-    encoding = result['encoding'] or 'utf-8'
-    print(f"Detected encoding for {file_path}: {encoding}")
-    return encoding
-
-def analyze_dataset(df):
-    """Analyze a sample of the dataset dynamically."""
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    sample_df = df.sample(n=min(100, len(df)), random_state=42)
-    columns = list(df.columns)
-    prompt = f"""
-    You are an AI analyst. Given a dataset sample with columns {columns}, provide:
-    1. A summary of key insights based on this sample (e.g., totals, trends, top values).
-    2. Suggested dashboards based on the columns (e.g., bar chart, line chart).
-    Return a valid JSON object with 'insights' (text) and 'dashboards' (list of {{type, x, y, title}}).
-    Ensure the response is strictly formatted as JSON, e.g., {{"insights": "text", "dashboards": [...]}}.
-    Note: This is a sample of a larger dataset; extrapolate trends where possible.
-    Dataset sample:\n{sample_df.describe().to_string()}\n{sample_df.head().to_string()}
-    """
-    try:
-        response = model.generate_content(prompt)
-        raw_response = response.text.strip()
-        print(f"Raw Gemini response (analyze_dataset): {raw_response}")
-        json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            print(f"Extracted JSON: {json_str}")
-            analysis = json.loads(json_str)
-            for dash in analysis["dashboards"]:
-                dash["data"] = fetch_dashboard_data(dash)
-            return analysis
-        else:
-            print("No JSON found in response")
-            return {"insights": "Failed to analyze dataset.", "dashboards": []}
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {str(e)}")
-        return {"insights": "Failed to analyze dataset due to AI response formatting.", "dashboards": []}
-    except Exception as e:
-        print(f"Gemini error: {str(e)}")
-        raise
-
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Uploads and analyzes any dataset dynamically."""
-    try:
-        timestamp = int(time.time())
-        file_name = f"{timestamp}_{file.filename}"
-        file_path = os.path.join(UPLOAD_DIR, file_name)
-        print(f"Saving file to {file_path}")
-        with open(file_path, "wb") as f:
-            f.write(await file.read())
-
-        print(f"Reading file: {file_name}")
-        chunk_size = 10000
-        encoding = detect_encoding(file_path)
-        try:
-            if file_name.endswith(".csv"):
-                df_chunks = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding)
-            elif file_name.endswith(".xlsx"):
-                df_chunks = pd.read_excel(file_path, chunksize=chunk_size)
-            elif file_name.endswith(".json"):
-                df_chunks = pd.read_json(file_path, chunksize=chunk_size, encoding=encoding)
-            else:
-                raise HTTPException(status_code=400, detail="Unsupported file format")
-        except UnicodeDecodeError:
-            print(f"UTF-8 failed, trying 'latin1' for {file_name}")
-            encoding = 'latin1'
-            if file_name.endswith(".csv"):
-                df_chunks = pd.read_csv(file_path, chunksize=chunk_size, encoding=encoding)
-            elif file_name.endswith(".xlsx"):
-                df_chunks = pd.read_excel(file_path, chunksize=chunk_size)
-            elif file_name.endswith(".json"):
-                df_chunks = pd.read_json(file_path, chunksize=chunk_size, encoding=encoding)
-
-        first_chunk = True
-        sample_df = None
-        with get_db_connection() as conn:
-            for chunk in df_chunks:
-                chunk.columns = [col.lower().replace(" ", "_") for col in chunk.columns]
-                print(f"Processing chunk with {len(chunk)} rows")
-                if first_chunk:
-                    # Dynamically create table based on first chunk's schema
-                    chunk.to_sql("business_data", conn, if_exists="replace", index=False)
-                    sample_df = chunk
-                    first_chunk = False
-                    # Create indexes dynamically based on common column types
-                    for col in chunk.columns:
-                        if chunk[col].dtype in ['object', 'string']:  # Index categorical columns
-                            conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{col} ON business_data ({col})")
-                    conn.commit()
-                    print(f"Created table with columns: {list(chunk.columns)}")
+        if filepath.endswith(".csv"):
+            with open(filepath, "r", encoding="utf-8") as f:
+                reader = csv.DictReader(f)
+                data = list(reader)
+                sampled_data = data[:sample_size]
+                # Convert sampled data to text for Gemini API
+                text_data = "\n".join([",".join(row.values()) for row in sampled_data])
+                # Infer column types
+                dtypes = {}
+                if data:
+                    first_row = data[0]
+                    for key, value in first_row.items():
+                        try:
+                            float(value)
+                            dtypes[key] = "float64"
+                        except ValueError:
+                            dtypes[key] = "object"
+                return data, text_data, dtypes
+        elif filepath.endswith(".json"):
+            with open(filepath, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    sampled_data = data[:sample_size]
+                    text_data = json.dumps(sampled_data)
+                    dtypes = {}
+                    if data:
+                        first_row = data[0]
+                        for key, value in first_row.items():
+                            if isinstance(value, (int, float)):
+                                dtypes[key] = "float64"
+                            else:
+                                dtypes[key] = "object"
+                    return data, text_data, dtypes
                 else:
-                    chunk.to_sql("business_data", conn, if_exists="append", index=False)
-
-        print("Analyzing with Gemini")
-        analysis = analyze_dataset(sample_df)
-        return {"message": f"File uploaded and saved at {file_path}", "analysis": analysis}
-    except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error uploading file: {str(e)}")
-
-def interpret_query(query_text):
-    """Converts natural language queries to SQL dynamically."""
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    # Get current table schema
-    with get_db_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("PRAGMA table_info(business_data)")
-        columns = [row["name"] for row in cursor.fetchall()]
-    
-    prompt = f"""
-    You are an AI analyst for a table 'business_data' with columns: {columns}.
-    For the query "{query_text}":
-    1. Generate a SQL query that returns results in the format: [{{"column1": value, "column2": value}}, ...].
-       For example, if columns include 'product' and 'sales', "What were total sales by product?" should return:
-       [{{"product": "value", "total_sales": value}}, ...]
-    2. Suggest a dashboard based on the columns (e.g., {{type: 'bar', x: 'column1', y: 'column2', title: 'Title'}}).
-    Return a valid JSON object with 'sql' (string) and 'dashboard' (object).
-    Ensure the response is strictly formatted as JSON, e.g., {{"sql": "query", "dashboard": {{...}}}}.
-    Do not include any text outside the JSON structure.
-    """
-    try:
-        response = model.generate_content(prompt)
-        raw_response = response.text.strip()
-        print(f"Raw Gemini response (interpret_query): {raw_response}")
-        json_match = re.search(r'\{.*\}', raw_response, re.DOTALL)
-        if json_match:
-            json_str = json_match.group(0)
-            print(f"Extracted JSON: {json_str}")
-            result = json.loads(json_str)
-            result["dashboard"]["data"] = fetch_dashboard_data(result["dashboard"])
-            return result
+                    return [], json.dumps(data), {}
         else:
-            print("No JSON found in response")
-            # Fallback with dynamic columns
-            x_col = columns[0]  # First column as x
-            y_col = columns[1] if len(columns) > 1 else columns[0]  # Second or first as y
-            return {
-                "sql": f"SELECT {x_col}, SUM({y_col}) as total_{y_col} FROM business_data GROUP BY {x_col}",
-                "dashboard": {
-                    "type": "bar",
-                    "x": x_col,
-                    "y": y_col,
-                    "title": f"{y_col.capitalize()} by {x_col.capitalize()}",
-                    "data": fetch_dashboard_data({"x": x_col, "y": y_col, "title": f"{y_col.capitalize()} by {x_col.capitalize()}"})
-                }
-            }
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {str(e)}")
-        x_col = columns[0]
-        y_col = columns[1] if len(columns) > 1 else columns[0]
-        return {
-            "sql": f"SELECT {x_col}, SUM({y_col}) as total_{y_col} FROM business_data GROUP BY {x_col}",
-            "dashboard": {
-                "type": "bar",
-                "x": x_col,
-                "y": y_col,
-                "title": f"{y_col.capitalize()} by {x_col.capitalize()}",
-                "data": fetch_dashboard_data({"x": x_col, "y": y_col, "title": f"{y_col.capitalize()} by {x_col.capitalize()}"})
-            }
+            raise ValueError("Unsupported file type: Only CSV and JSON are supported")
+    except Exception as e:
+        raise ValueError(f"Error processing file: {str(e)}")
+
+# Helper function to get dataset summary without pandas
+def get_dataset_summary(data, dtypes, max_rows_for_stats=10000):
+    if not data:
+        return {"summary": "Empty or non-tabular data"}
+    
+    data_limited = data[:max_rows_for_stats]
+    summary = {
+        "num_rows": len(data),
+        "num_columns": len(data[0]) if data else 0,
+        "columns": {}
+    }
+    
+    if not data:
+        return summary
+    
+    # Infer column stats
+    columns = list(data[0].keys())
+    for col in columns:
+        values = [row[col] for row in data_limited]
+        unique_values = len(set(values))
+        missing_values = values.count("") + values.count(None)
+        summary["columns"][col] = {
+            "type": dtypes.get(col, "unknown"),
+            "unique_values": unique_values,
+            "missing_values": missing_values,
         }
-    except Exception as e:
-        print(f"Gemini error: {str(e)}")
-        raise
+        if dtypes.get(col) == "float64":
+            numeric_values = [float(v) for v in values if v and v != ""]
+            if numeric_values:
+                mean = sum(numeric_values) / len(numeric_values)
+                variance = sum((x - mean) ** 2 for x in numeric_values) / len(numeric_values)
+                std = variance ** 0.5
+                summary["columns"][col]["mean"] = mean
+                summary["columns"][col]["std"] = std
+        else:
+            # Find the most common value
+            value_counts = {}
+            for v in values:
+                value_counts[v] = value_counts.get(v, 0) + 1
+            top_value = max(value_counts.items(), key=lambda x: x[1])[0] if value_counts else "N/A"
+            summary["columns"][col]["top_value"] = top_value
+    
+    return summary
 
-@app.post("/query")
-async def process_query(query: Query):
+@app.route("/upload", methods=["POST"])
+def upload_file():
+    if "file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+    
+    filepath = os.path.join(app.config["UPLOAD_FOLDER"], file.filename)
+    file.save(filepath)
+    
+    conn = create_connection()
+    file_id = insert_upload(conn, file.filename, filepath)
+    conn.close()
+    
+    return jsonify({"message": "File uploaded", "file_id": file_id, "filename": file.filename})
+
+@app.route("/ask", methods=["POST"])
+def ask_question():
+    data = request.get_json()
+    file_id = data.get("file_id")
+    question = data.get("question")
+    
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        return jsonify({"error": "File not found"}), 404
+    
+    filepath = result[0]
+    
     try:
-        result = interpret_query(query.text)
-        sql_query = result["sql"]
-        print(f"Generated SQL: {sql_query}")
-        if "DROP" in sql_query.upper() or "DELETE" in sql_query.upper():
-            raise HTTPException(status_code=400, detail="Unsafe SQL query detected")
-
-        with get_db_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(sql_query)
-            results = [dict(row) for row in cursor.fetchall()]
-        
-        return {"answer": results, "dashboard": result["dashboard"]}
+        data, text_data, dtypes = extract_data(filepath)
+        summary = get_dataset_summary(data, dtypes)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    
+    model = GenerativeModel("gemini-1.5-pro")
+    
+    try:
+        prompt = f"Dataset Summary: {json.dumps(summary)}\n\nSample Data (first 1000 rows):\n{text_data}\n\nQuestion: {question}"
+        response = model.generate_content([prompt])
+        return jsonify({"answer": response.text})
     except Exception as e:
-        print(f"Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing query: {str(e)}")
+        return jsonify({"error": f"Error with Gemini API: {str(e)}"}), 500
 
-@app.get("/")
-async def root():
-    return {"message": "Backend is running"}
+@app.route("/data/<int:file_id>", methods=["GET"])
+def get_data(file_id):
+    page = int(request.args.get("page", 1))
+    per_page = int(request.args.get("per_page", 1000))
+    
+    conn = create_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        return jsonify({"error": "File not found"}), 404
+    
+    filepath = result[0]
+    
+    try:
+        data, _, dtypes = extract_data(filepath)
+        summary = get_dataset_summary(data, dtypes)
+        
+        # Paginate the data
+        start = (page - 1) * per_page
+        end = start + per_page
+        paginated_data = data[start:end]
+        
+        return jsonify({
+            "data": paginated_data,
+            "summary": summary,
+            "total_rows": len(data),
+            "page": page,
+            "per_page": per_page
+        })
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+if __name__ == "__main__":
+    app.run(debug=True, port=5000)

@@ -1,19 +1,39 @@
 import sqlite3
+from sqlite3 import Error
 
-def init_db():
-    conn = sqlite3.connect("business_data.db")
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS business_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            product TEXT,
-            sales INTEGER,
-            revenue REAL,
-            date TEXT
-        )
-    """)
+def create_connection():
+    conn = None
+    try:
+        conn = sqlite3.connect("business_data.db")
+        # Create the uploads table if it doesn't exist
+        create_table(conn)
+        return conn
+    except Error as e:
+        print(f"Error connecting to database: {e}")
+    return conn
+
+def create_table(conn):
+    try:
+        cursor = conn.cursor()
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS uploads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                filename TEXT NOT NULL,
+                filepath TEXT NOT NULL
+            )
+        ''')
+        conn.commit()
+    except Error as e:
+        print(f"Error creating table: {e}")
+
+def insert_upload(conn, filename, filepath):
+    sql = '''INSERT INTO uploads (filename, filepath) VALUES (?, ?)'''
+    cursor = conn.cursor()
+    cursor.execute(sql, (filename, filepath))
     conn.commit()
-    conn.close()
+    return cursor.lastrowid
 
 if __name__ == "__main__":
-    init_db()
-    print("Database initialized.")
+    conn = create_connection()
+    if conn:
+        conn.close()
