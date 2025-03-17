@@ -57,6 +57,14 @@ def migrate_database(conn):
                 conn.execute("INSERT INTO schema_version (version) VALUES (1)")
                 logger.info("Applied schema migration to version 1")
 
+            # 🔹 Ensure file_size exists if missing
+            column_check = conn.execute("PRAGMA table_info(uploads)").fetchall()
+            column_names = [col[1] for col in column_check]
+
+            if "file_size" not in column_names:
+                logger.warning("Column 'file_size' is missing in 'uploads'. Adding it now...")
+                conn.execute("ALTER TABLE uploads ADD COLUMN file_size INTEGER")
+
             if current_version < 2:
                 try:
                     conn.execute("ALTER TABLE uploads ADD COLUMN file_hash TEXT")
@@ -71,10 +79,7 @@ def migrate_database(conn):
                 conn.execute("INSERT INTO schema_version (version) VALUES (2)")
                 logger.info("Applied schema migration to version 2")
 
-            if current_version >= SCHEMA_VERSION:
-                logger.info(f"Database schema is up-to-date at version {SCHEMA_VERSION}")
-            else:
-                logger.info(f"Database schema migrated to version {SCHEMA_VERSION}")
+            logger.info(f"Database schema is up-to-date at version {SCHEMA_VERSION}")
 
     except Error as e:
         logger.error(f"Error migrating database: {e}")
@@ -104,76 +109,6 @@ def insert_upload(conn, filename, filepath, file_hash=None, metadata=None):
         logger.error(f"Error inserting file: {e}")
         conn.rollback()
         return None
-
-def get_upload_by_id(conn, file_id):
-    """Retrieve file details by ID, only active records."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT * FROM uploads WHERE id = ? AND status = 'active'", (file_id,))
-        result = cursor.fetchone()
-        if result:
-            return dict(result)
-        logger.warning(f"No active file found with ID {file_id}")
-        return None
-    except Error as e:
-        logger.error(f"Error retrieving file: {e}")
-        return None
-
-def delete_upload(conn, file_id, hard_delete=False):
-    """Soft-delete or hard-delete an upload."""
-    try:
-        with conn:
-            if hard_delete:
-                cursor = conn.execute("DELETE FROM uploads WHERE id = ?", (file_id,))
-                action = "Hard-deleted"
-            else:
-                cursor = conn.execute(
-                    "UPDATE uploads SET status = 'deleted' WHERE id = ? AND status = 'active'",
-                    (file_id,)
-                )
-                action = "Soft-deleted"
-
-            if cursor.rowcount > 0:
-                logger.info(f"{action} file with ID {file_id}")
-                return True
-            logger.warning(f"No active file found with ID {file_id} to delete")
-            return False
-    except Error as e:
-        logger.error(f"Error deleting file: {e}")
-        conn.rollback()
-        return False
-
-def list_uploads(conn, limit=100, offset=0, status='active'):
-    """List uploads with pagination and status filter."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM uploads WHERE status = ? ORDER BY uploaded_at DESC LIMIT ? OFFSET ?",
-            (status, limit, offset)
-        )
-        results = [dict(row) for row in cursor.fetchall()]
-        logger.info(f"Retrieved {len(results)} {status} uploads")
-        return results
-    except Error as e:
-        logger.error(f"Error listing uploads: {e}")
-        return []
-
-def get_database_stats(conn):
-    """Retrieve database statistics."""
-    try:
-        cursor = conn.cursor()
-        stats = {}
-        cursor.execute("SELECT COUNT(*) as total FROM uploads WHERE status = 'active'")
-        stats['total_active_uploads'] = cursor.fetchone()['total']
-        cursor.execute("SELECT COUNT(*) as total FROM uploads WHERE status = 'deleted'")
-        stats['total_deleted_uploads'] = cursor.fetchone()['total']
-        cursor.execute("SELECT SUM(file_size) as total_size FROM uploads WHERE status = 'active'")
-        stats['total_size_bytes'] = cursor.fetchone()['total_size'] or 0
-        logger.info(f"Retrieved database stats: {stats}")
-        return stats
-    except Error as e:
-        logger.error(f"Error retrieving stats: {e}")
-        return {}
 
 if __name__ == "__main__":
     conn = create_connection()
