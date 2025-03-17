@@ -1,2 +1,33 @@
+# Backend
 Backend/business_data.db
 Backend/uploads/*
+
+# Environment variables
+.env
+
+# Node.js dependencies
+node_modules/
+
+# Python dependencies
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+
+# Virtual environment
+venv/
+env/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Docker related files
+docker-compose.override.yml
+
+# OS generated files
+.DS_Store
+Thumbs.db
