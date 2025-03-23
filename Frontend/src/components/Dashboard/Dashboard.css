@@ -1,0 +1,416 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Poppins', sans-serif;
+}
+
+.dashboard {
+  padding: 40px 20px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: all 0.3s ease;
+}
+
+.app.dark .dashboard {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: #fff;
+}
+
+.app.light .dashboard {
+  background: linear-gradient(135deg, #fefefe 0%, #f0f4f8 100%);
+  color: #2c3e50;
+}
+
+.dashboard h2 {
+  text-align: center;
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin-bottom: 40px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: fadeInDown 1s ease;
+}
+
+.app.dark .dashboard h2 {
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.app.light .dashboard h2 {
+  color: #2c3e50;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.status {
+  text-align: center;
+  padding: 20px;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  margin: 0 auto 30px;
+  max-width: 600px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s ease;
+}
+
+.status.loading {
+  background: rgba(255, 255, 255, 0.1);
+  color: #00d4ff;
+  border: 2px solid #00d4ff;
+}
+
+.app.light .status.loading {
+  background: rgba(26, 188, 156, 0.1);
+  color: #1abc9c;
+  border: 2px solid #1abc9c;
+}
+
+.status.error {
+  background: rgba(255, 75, 75, 0.1);
+  color: #ff4b4b;
+  border: 2px solid #ff4b4b;
+}
+
+.app.light .status.error {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+}
+
+.app.dark .summary,
+.app.dark .key-takeaways,
+.app.dark .trends,
+.app.dark .chart-container {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 25px;
+  margin-bottom: 40px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.5);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  animation: fadeInUp 0.8s ease;
+}
+
+.app.light .summary,
+.app.light .key-takeaways,
+.app.light .trends,
+.app.light .chart-container {
+  background: #fff;
+  border-radius: 16px;
+  padding: 25px;
+  margin-bottom: 40px;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ecf0f1;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  animation: fadeInUp 0.8s ease;
+}
+
+.summary:hover,
+.key-takeaways:hover,
+.trends:hover,
+.chart-container:hover {
+  transform: translateY(-5px);
+}
+
+.app.dark .summary:hover,
+.app.dark .key-takeaways:hover,
+.app.dark .trends:hover,
+.app.dark .chart-container:hover {
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.6);
+}
+
+.app.light .summary:hover,
+.app.light .key-takeaways:hover,
+.app.light .trends:hover,
+.app.light .chart-container:hover {
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.15);
+}
+
+.app.dark .summary h3,
+.app.dark .key-takeaways h3,
+.app.dark .trends h3,
+.app.dark .chart-container h3 {
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  border-bottom: 3px solid #00d4ff;
+  display: inline-block;
+  padding-bottom: 5px;
+}
+
+.app.light .summary h3,
+.app.light .key-takeaways h3,
+.app.light .trends h3,
+.app.light .chart-container h3 {
+  color: #2c3e50;
+  font-size: 2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  border-bottom: 3px solid #1abc9c;
+  display: inline-block;
+  padding-bottom: 5px;
+}
+
+.app.dark .summary p {
+  font-size: 1.2rem;
+  color: #d0d0d0;
+  margin: 10px 0;
+}
+
+.app.light .summary p {
+  font-size: 1.2rem;
+  color: #7f8c8d;
+  margin: 10px 0;
+}
+
+.summary table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  font-size: 1rem;
+}
+
+.app.dark .summary table {
+  color: #d0d0d0;
+}
+
+.app.light .summary table {
+  color: #2c3e50;
+}
+
+.summary th,
+.summary td {
+  padding: 15px;
+  border: 1px solid #e0e7ff;
+  text-align: left;
+}
+
+.app.dark .summary th {
+  background: #2d2d2d;
+  color: #fff;
+  font-weight: 600;
+}
+
+.app.light .summary th {
+  background: #1abc9c;
+  color: #fff;
+  font-weight: 600;
+}
+
+.app.dark .summary td {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.app.light .summary td {
+  background: #f9fbfd;
+  border: 1px solid #dfe6e9;
+}
+
+.key-takeaways ul,
+.trends ul {
+  list-style: none;
+  padding: 0;
+}
+
+.app.dark .key-takeaways li {
+  color: #d0d0d0;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  padding-left: 30px;
+  position: relative;
+  transition: color 0.3s ease;
+}
+
+.app.light .key-takeaways li {
+  color: #2c3e50;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  padding-left: 30px;
+  position: relative;
+  transition: color 0.3s ease;
+}
+
+.app.dark .key-takeaways li:hover {
+  color: #00d4ff;
+}
+
+.app.light .key-takeaways li:hover {
+  color: #1abc9c;
+}
+
+.key-takeaways li:before {
+  content: "✔";
+  color: #27ae60;
+  position: absolute;
+  left: 0;
+  font-size: 1.4rem;
+  top: 2px;
+}
+
+.app.dark .trends li {
+  color: #d0d0d0;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  padding-left: 25px;
+  position: relative;
+}
+
+.app.light .trends li {
+  color: #7f8c8d;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  padding-left: 25px;
+  position: personally;
+}
+
+.trends li:before {
+  content: "➤";
+  color: #ff6384;
+  position: absolute;
+  left: 0;
+  font-size: 1.2rem;
+}
+
+.visualizations {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 30px;
+  padding: 0 10px;
+}
+
+.app.dark .chart-container h3 {
+  font-size: 1.6rem;
+  text-align: center;
+}
+
+.app.light .chart-container h3 {
+  font-size: 1.6rem;
+  text-align: center;
+}
+
+.app.dark .chart-container p {
+  font-size: 1rem;
+  color: #d0d0d0;
+  text-align: center;
+}
+
+.app.light .chart-container p {
+  font-size: 1rem;
+  color: #95a5a6;
+  text-align: center;
+}
+
+.pagination {
+  margin-top: 40px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.pagination button {
+  padding: 12px 25px;
+  border: none;
+  border-radius: 30px;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.app.dark .pagination button {
+  background: #00d4ff;
+  color: #1a1a1a;
+}
+
+.app.dark .pagination button:hover:not(:disabled) {
+  background: #66e6ff;
+  transform: scale(1.05);
+}
+
+.app.light .pagination button {
+  background: #1abc9c;
+  color: #fff;
+}
+
+.app.light .pagination button:hover:not(:disabled) {
+  background: #16a085;
+  transform: scale(1.05);
+}
+
+.pagination button:disabled {
+  background: #b0c4de;
+  cursor: not-allowed;
+}
+
+.app.dark .pagination span {
+  font-size: 1.2rem;
+  color: #fff;
+  font-weight: 600;
+}
+
+.app.light .pagination span {
+  font-size: 1.2rem;
+  color: #2c3e50;
+  font-weight: 600;
+}
+
+.pagination select {
+  padding: 10px;
+  border-radius: 8px;
+  border: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.app.dark .pagination select {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+.app.light .pagination select {
+  background: #fff;
+  color: #2c3e50;
+  border: 1px solid #ecf0f1;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .dashboard h2 {
+    font-size: 2rem;
+  }
+  .app.dark .summary h3,
+  .app.dark .key-takeaways h3,
+  .app.dark .trends h3,
+  .app.light .summary h3,
+  .app.light .key-takeaways h3,
+  .app.light .trends h3 {
+    font-size: 1.6rem;
+  }
+  .summary table,
+  .app.dark .key-takeaways li,
+  .app.dark .trends li,
+  .app.light .key-takeaways li,
+  .app.light .trends li {
+    font-size: 1rem;
+  }
+  .app.dark .chart-container h3,
+  .app.light .chart-container h3 {
+    font-size: 1.4rem;
+  }
+  .visualizations {
+    grid-template-columns: 1fr;
+  }
+}

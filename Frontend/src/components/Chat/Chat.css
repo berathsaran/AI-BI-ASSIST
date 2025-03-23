@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+.chat {
+  padding: 40px 20px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.app.dark .chat {
+  background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);
+  color: #fff;
+}
+
+.app.light .chat {
+  background: linear-gradient(135deg, #fefefe 0%, #f0f4f8 100%);
+  color: #2c3e50;
+}
+
+.chat h2 {
+  font-size: 2.8rem;
+  font-weight: 700;
+  margin-bottom: 40px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  animation: fadeInDown 1s ease;
+}
+
+.app.dark .chat h2 {
+  color: #fff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.app.light .chat h2 {
+  color: #2c3e50;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.input-section {
+  display: flex;
+  gap: 15px;
+  width: 100%;
+  max-width: 800px;
+  margin-bottom: 30px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.input-section input {
+  flex: 1;
+  min-width: 250px;
+  padding: 15px 25px;
+  border: none;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  transition: box-shadow 0.3s ease, transform 0.3s ease;
+}
+
+.app.dark .input-section input {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.app.light .input-section input {
+  background: #fff;
+  color: #2c3e50;
+  border: 1px solid #ecf0f1;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.input-section input:focus {
+  outline: none;
+}
+
+.app.dark .input-section input:focus {
+  box-shadow: 0 6px 20px rgba(0, 212, 255, 0.4);
+  transform: translateY(-2px);
+}
+
+.app.light .input-section input:focus {
+  box-shadow: 0 6px 20px rgba(26, 188, 156, 0.3);
+  transform: translateY(-2px);
+}
+
+.input-section button {
+  padding: 15px 30px;
+  border: none;
+  border-radius: 30px;
+  font-size: 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.3s ease, transform 0.3s ease;
+}
+
+.app.dark .input-section button {
+  background: #00d4ff;
+  color: #1a1a1a;
+}
+
+.app.dark .input-section button:hover:not(:disabled) {
+  background: #66e6ff;
+  transform: scale(1.05);
+}
+
+.app.light .input-section button {
+  background: #1abc9c;
+  color: #fff;
+}
+
+.app.light .input-section button:hover:not(:disabled) {
+  background: #16a085;
+  transform: scale(1.05);
+}
+
+.input-section button:disabled {
+  background: #b0c4de;
+  cursor: not-allowed;
+}
+
+.error {
+  padding: 20px;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  max-width: 800px;
+  width: 100%;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  animation: fadeInUp 0.5s ease;
+}
+
+.app.dark .error {
+  background: rgba(255, 75, 75, 0.1);
+  color: #ff4b4b;
+  border: 2px solid #ff4b4b;
+}
+
+.app.light .error {
+  background: rgba(231, 76, 60, 0.1);
+  color: #e74c3c;
+  border: 2px solid #e74c3c;
+}
+
+.answer {
+  padding: 25px;
+  border-radius: 16px;
+  max-width: 800px;
+  width: 100%;
+  transition: transform 0.3s ease;
+  animation: fadeInUp 0.8s ease;
+}
+
+.app.dark .answer {
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.app.light .answer {
+  background: #fff;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ecf0f1;
+}
+
+.answer:hover {
+  transform: translateY(-5px);
+}
+
+.app.dark .answer p {
+  margin: 15px 0;
+  font-size: 1.2rem;
+  color: #d0d0d0;
+}
+
+.app.light .answer p {
+  margin: 15px 0;
+  font-size: 1.2rem;
+  color: #7f8c8d;
+}
+
+.app.dark .answer strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.app.light .answer strong {
+  color: #1abc9c;
+  font-weight: 600;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 768px) {
+  .chat h2 {
+    font-size: 2rem;
+  }
+  .input-section input, .input-section button {
+    font-size: 1rem;
+    padding: 12px 20px;
+  }
+  .error, .answer p {
+    font-size: 1rem;
+  }
+}
