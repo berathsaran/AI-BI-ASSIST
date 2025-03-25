@@ -1,3 +1,4 @@
+// Frontend/src/components/FileUpload/FileUpload.jsx
 import React, { useState, useCallback } from "react";
 import "../FileUpload/FileUpload.css";
 
@@ -43,7 +44,7 @@ const FileUpload = ({ setFileId, onUploadSuccess }) => {
   }, []);
 
   const handleSubmit = useCallback(
-    async (e) => {
+    (e) => {
       e.preventDefault();
       if (!file) {
         setError("Please select a file.");
@@ -58,14 +59,17 @@ const FileUpload = ({ setFileId, onUploadSuccess }) => {
       formData.append("file", file);
 
       const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/upload", true);
+
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
           setUploadProgress(percentComplete);
         }
       };
+
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr.status === 200) {
           const data = JSON.parse(xhr.responseText);
           setFileId(data.file_id);
           setSuccess(`File "${data.filename}" uploaded successfully!`);
@@ -73,17 +77,26 @@ const FileUpload = ({ setFileId, onUploadSuccess }) => {
           setUploadProgress(100);
           if (onUploadSuccess) onUploadSuccess(data);
         } else {
-          setError(`Upload failed: ${xhr.status} - ${xhr.responseText}`);
+          setError(`Upload failed: ${xhr.status} - ${xhr.statusText}`);
           setUploadProgress(0);
         }
         setLoading(false);
       };
+
       xhr.onerror = () => {
-        setError("Upload failed. Please try again.");
+        console.error("Upload request failed:", xhr.status, xhr.statusText);
+        setError(`Upload failed: ${xhr.status} - ${xhr.statusText}`);
         setUploadProgress(0);
         setLoading(false);
       };
-      xhr.open("POST", "http://localhost:5000/upload", true);
+
+      xhr.ontimeout = () => {
+        setError("Upload timed out. Please try again.");
+        setUploadProgress(0);
+        setLoading(false);
+      };
+
+      xhr.timeout = 10000;
       xhr.send(formData);
     },
     [file, setFileId, onUploadSuccess]
@@ -91,15 +104,31 @@ const FileUpload = ({ setFileId, onUploadSuccess }) => {
 
   return (
     <div className="file-upload-container">
-      <button id="get-started-btn" onClick={() => document.getElementById("fileInput").click()}>
-        Get Started
-      </button>
+      {!file && !loading && !success && (
+        <button id="get-started-btn" onClick={() => document.getElementById("fileInput").click()} disabled={loading}>
+          Get Started
+        </button>
+      )}
       <input
         type="file"
         id="fileInput"
         style={{ display: "none" }}
         onChange={handleFileChange}
+        disabled={loading}
       />
+      {file && !loading && !success && (
+        <div className="file-selected">
+          <p>Selected file: {file.name}</p>
+          <div className="button-group">
+            <button onClick={handleSubmit} className="upload-btn">
+              Upload File
+            </button>
+            <button onClick={() => setFile(null)} className="cancel-btn">
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       {loading && (
         <div className="progress-bar">
           <div className="progress-fill" style={{ width: `${uploadProgress}%` }}>
@@ -108,7 +137,14 @@ const FileUpload = ({ setFileId, onUploadSuccess }) => {
         </div>
       )}
       {error && <p className="error-message">{error}</p>}
-      {success && <p className="success-message">{success}</p>}
+      {success && (
+        <div className="success-message">
+          <p>{success}</p>
+          <button onClick={() => { setSuccess(""); setFile(null); }} className="upload-another-btn">
+            Upload Another File
+          </button>
+        </div>
+      )}
     </div>
   );
 };

@@ -45,9 +45,7 @@ const Dashboard = ({ fileId }) => {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(
-          `http://localhost:5000/data/${fileId}?page=${page}&per_page=${perPage}`
-        );
+        const response = await fetch(`/data/${fileId}?page=${page}&per_page=${perPage}`);  // Use proxy path
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(`Data Fetch Error: ${response.status} - ${errorData.error || "Unknown error"}`);
@@ -67,6 +65,7 @@ const Dashboard = ({ fileId }) => {
         }
         setColumnTypes(types);
       } catch (err) {
+        console.error("Dashboard fetch error:", err);
         setError(err.message);
         setData([]);
         setSummary({});
@@ -98,8 +97,15 @@ const Dashboard = ({ fileId }) => {
     });
   const aggregateCount = (col) => getUniqueValues(col).map(val => data.filter(row => row[col] === val).length);
   const timeSeriesData = (timeCol, valueCol) => {
-    const sortedData = [...data].sort((a, b) => new Date(a[timeCol]) - new Date(b[timeCol]));
-    return sortedData.map(row => ({ x: new Date(row[timeCol]), y: parseFloat(row[valueCol]) || 0 }));
+    const sortedData = [...data].sort((a, b) => {
+      const dateA = new Date(a[timeCol]);
+      const dateB = new Date(b[timeCol]);
+      return isNaN(dateA) || isNaN(dateB) ? 0 : dateA - dateB;  // Fallback for invalid dates
+    });
+    return sortedData.map(row => ({
+      x: new Date(row[timeCol]).toISOString(),  // Ensure valid date string
+      y: parseFloat(row[valueCol]) || 0
+    })).filter(d => !isNaN(new Date(d.x)));  // Filter out invalid dates
   };
 
   const visualizations = useMemo(() => {
@@ -112,130 +118,134 @@ const Dashboard = ({ fileId }) => {
       const matchLine = suggestion.match(/use a (line|bar|pie|doughnut) chart for '([^']+)' vs '([^']+)'/i);
       const matchSingle = suggestion.match(/use a (bar|pie|doughnut) chart for '([^']+)'/i);
 
-      if (matchLine) {
-        const [, chartType, col1, col2] = matchLine;
-        if (!data[0]?.[col1] || !data[0]?.[col2]) return;
+      try {
+        if (matchLine) {
+          const [, chartType, col1, col2] = matchLine;
+          if (!data[0]?.[col1] || !data[0]?.[col2]) return;
 
-        if (chartType.toLowerCase() === "line" && numericalCols.includes(col2) && dateCols.includes(col1)) {
-          viz.push(
-            <div key={`viz-${idx}`} className="chart-container">
-              <h3>{col2} Trend Over {col1}</h3>
-              <Line
-                data={{
-                  datasets: [{
-                    label: col2,
-                    data: timeSeriesData(col1, col2),
-                    borderColor: "#ff6384",
-                    backgroundColor: "rgba(255, 99, 132, 0.2)",
-                    fill: true,
-                    tension: 0.4,
-                  }],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { position: "top" }, title: { display: true, text: `${col2} Trend Over ${col1}`, font: { size: 18 } } },
-                  scales: { x: { type: "time", title: { display: true, text: col1 } }, y: { title: { display: true, text: col2 } } },
-                  animation: { duration: 1500, easing: "easeInOutQuart" },
-                }}
-              />
-            </div>
-          );
-        } else if (chartType.toLowerCase() === "bar" && categoricalCols.includes(col1) && numericalCols.includes(col2)) {
-          viz.push(
-            <div key={`viz-${idx}`} className="chart-container">
-              <h3>Total {col2} by {col1}</h3>
-              <Bar
-                data={{
-                  labels: getUniqueValues(col1).slice(0, 10),
-                  datasets: [{
-                    label: `Total ${col2}`,
-                    data: aggregateSum(col1, col2).slice(0, 10),
-                    backgroundColor: "rgba(54, 162, 235, 0.8)",
-                    borderColor: "#36A2EB",
-                    borderWidth: 1,
-                  }],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { position: "top" }, title: { display: true, text: `Total ${col2} by ${col1}`, font: { size: 18 } } },
-                  scales: { y: { beginAtZero: true, title: { display: true, text: `Total ${col2}` } }, x: { title: { display: true, text: col1 } } },
-                  animation: { duration: 1000, easing: "easeOutBounce" },
-                }}
-              />
-            </div>
-          );
-        } else if (chartType.toLowerCase() === "pie" && categoricalCols.includes(col1) && numericalCols.includes(col2)) {
-          viz.push(
-            <div key={`viz-${idx}`} className="chart-container">
-              <h3>{col2} Distribution by {col1}</h3>
-              <Pie
-                data={{
-                  labels: getUniqueValues(col1).slice(0, 8),
-                  datasets: [{
-                    label: col2,
-                    data: aggregateSum(col1, col2).slice(0, 8),
-                    backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#E7E9ED", "#C9CBCF"],
-                  }],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { position: "top" }, title: { display: true, text: `${col2} Distribution by ${col1}`, font: { size: 18 } } },
-                  animation: { duration: 1200, easing: "easeInOutQuad" },
-                }}
-              />
-            </div>
-          );
-        }
-      } else if (matchSingle) {
-        const [, chartType, col] = matchSingle;
-        if (!data[0]?.[col]) return;
+          if (chartType.toLowerCase() === "line" && numericalCols.includes(col2) && dateCols.includes(col1)) {
+            viz.push(
+              <div key={`viz-${idx}`} className="chart-container">
+                <h3>{col2} Trend Over {col1}</h3>
+                <Line
+                  data={{
+                    datasets: [{
+                      label: col2,
+                      data: timeSeriesData(col1, col2),
+                      borderColor: "#ff6384",
+                      backgroundColor: "rgba(255, 99, 132, 0.2)",
+                      fill: true,
+                      tension: 0.4,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { position: "top" }, title: { display: true, text: `${col2} Trend Over ${col1}`, font: { size: 18 } } },
+                    scales: { x: { type: "time", title: { display: true, text: col1 } }, y: { title: { display: true, text: col2 } } },
+                    animation: { duration: 1500, easing: "easeInOutQuart" },
+                  }}
+                />
+              </div>
+            );
+          } else if (chartType.toLowerCase() === "bar" && categoricalCols.includes(col1) && numericalCols.includes(col2)) {
+            viz.push(
+              <div key={`viz-${idx}`} className="chart-container">
+                <h3>Total {col2} by {col1}</h3>
+                <Bar
+                  data={{
+                    labels: getUniqueValues(col1).slice(0, 10),
+                    datasets: [{
+                      label: `Total ${col2}`,
+                      data: aggregateSum(col1, col2).slice(0, 10),
+                      backgroundColor: "rgba(54, 162, 235, 0.8)",
+                      borderColor: "#36A2EB",
+                      borderWidth: 1,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { position: "top" }, title: { display: true, text: `Total ${col2} by ${col1}`, font: { size: 18 } } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: `Total ${col2}` } }, x: { title: { display: true, text: col1 } } },
+                    animation: { duration: 1000, easing: "easeOutBounce" },
+                  }}
+                />
+              </div>
+            );
+          } else if (chartType.toLowerCase() === "pie" && categoricalCols.includes(col1) && numericalCols.includes(col2)) {
+            viz.push(
+              <div key={`viz-${idx}`} className="chart-container">
+                <h3>{col2} Distribution by {col1}</h3>
+                <Pie
+                  data={{
+                    labels: getUniqueValues(col1).slice(0, 8),
+                    datasets: [{
+                      label: col2,
+                      data: aggregateSum(col1, col2).slice(0, 8),
+                      backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#E7E9ED", "#C9CBCF"],
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { position: "top" }, title: { display: true, text: `${col2} Distribution by ${col1}`, font: { size: 18 } } },
+                    animation: { duration: 1200, easing: "easeInOutQuad" },
+                  }}
+                />
+              </div>
+            );
+          }
+        } else if (matchSingle) {
+          const [, chartType, col] = matchSingle;
+          if (!data[0]?.[col]) return;
 
-        if ((chartType.toLowerCase() === "doughnut" || chartType.toLowerCase() === "pie") && categoricalCols.includes(col)) {
-          viz.push(
-            <div key={`viz-${idx}`} className="chart-container">
-              <h3>{col} Distribution</h3>
-              <Doughnut
-                data={{
-                  labels: getUniqueValues(col).slice(0, 8),
-                  datasets: [{
-                    label: "Count",
-                    data: aggregateCount(col).slice(0, 8),
-                    backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#E7E9ED", "#C9CBCF"],
-                  }],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { position: "top" }, title: { display: true, text: `${col} Distribution`, font: { size: 18 } } },
-                  animation: { duration: 1200, easing: "easeInOutQuad" },
-                }}
-              />
-            </div>
-          );
-        } else if (chartType.toLowerCase() === "bar" && numericalCols.includes(col)) {
-          viz.push(
-            <div key={`viz-${idx}`} className="chart-container">
-              <h3>{col} Values (Sample)</h3>
-              <Bar
-                data={{
-                  labels: data.slice(0, 10).map((_, i) => `Entry ${i + 1}`),
-                  datasets: [{
-                    label: col,
-                    data: data.slice(0, 10).map(row => parseFloat(row[col]) || 0),
-                    backgroundColor: "rgba(54, 162, 235, 0.8)",
-                    borderColor: "#36A2EB",
-                    borderWidth: 1,
-                  }],
-                }}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { position: "top" }, title: { display: true, text: `${col} Values (Sample)`, font: { size: 18 } } },
-                  scales: { y: { beginAtZero: true, title: { display: true, text: col } }, x: { title: { display: true, text: "Entries" } } },
-                  animation: { duration: 1000, easing: "easeOutBounce" },
-                }}
-              />
-            </div>
-          );
+          if ((chartType.toLowerCase() === "doughnut" || chartType.toLowerCase() === "pie") && categoricalCols.includes(col)) {
+            viz.push(
+              <div key={`viz-${idx}`} className="chart-container">
+                <h3>{col} Distribution</h3>
+                <Doughnut
+                  data={{
+                    labels: getUniqueValues(col).slice(0, 8),
+                    datasets: [{
+                      label: "Count",
+                      data: aggregateCount(col).slice(0, 8),
+                      backgroundColor: ["#FF6384", "#36A2EB", "#FFCE56", "#4BC0C0", "#9966FF", "#FF9F40", "#E7E9ED", "#C9CBCF"],
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { position: "top" }, title: { display: true, text: `${col} Distribution`, font: { size: 18 } } },
+                    animation: { duration: 1200, easing: "easeInOutQuad" },
+                  }}
+                />
+              </div>
+            );
+          } else if (chartType.toLowerCase() === "bar" && numericalCols.includes(col)) {
+            viz.push(
+              <div key={`viz-${idx}`} className="chart-container">
+                <h3>{col} Values (Sample)</h3>
+                <Bar
+                  data={{
+                    labels: data.slice(0, 10).map((_, i) => `Entry ${i + 1}`),
+                    datasets: [{
+                      label: col,
+                      data: data.slice(0, 10).map(row => parseFloat(row[col]) || 0),
+                      backgroundColor: "rgba(54, 162, 235, 0.8)",
+                      borderColor: "#36A2EB",
+                      borderWidth: 1,
+                    }],
+                  }}
+                  options={{
+                    responsive: true,
+                    plugins: { legend: { position: "top" }, title: { display: true, text: `${col} Values (Sample)`, font: { size: 18 } } },
+                    scales: { y: { beginAtZero: true, title: { display: true, text: col } }, x: { title: { display: true, text: "Entries" } } },
+                    animation: { duration: 1000, easing: "easeOutBounce" },
+                  }}
+                />
+              </div>
+            );
+          }
         }
+      } catch (e) {
+        console.warn(`Failed to render visualization for suggestion "${suggestion}": ${e.message}`);
       }
     });
 

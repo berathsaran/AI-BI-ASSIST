@@ -16,19 +16,19 @@ const Chat = ({ fileId }) => {
     setError(null);
     setAnswer("");
     try {
-      const response = await fetch("http://localhost:5000/ask", {
+      const response = await fetch("/ask", {  // Use proxy path
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ file_id: fileId, question }),
       });
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || "Failed to get an answer.");
+        throw new Error(errorData.error || `Request failed with status ${response.status}`);
       }
       const data = await response.json();
       setAnswer(data.answer);
     } catch (err) {
-      setError(err.message);
+      setError(`Error: ${err.message}`);
       setAnswer("");
     } finally {
       setLoading(false);
@@ -55,7 +55,9 @@ const Chat = ({ fileId }) => {
         <button onClick={handleAskQuestion} disabled={loading}>
           {loading ? "Thinking..." : "Ask"}
         </button>
-        <button onClick={handleClearHistory} disabled={loading}>Clear</button>
+        <button onClick={handleClearHistory} disabled={loading}>
+          Clear History
+        </button>
       </div>
       {error && <div className="error">{error}</div>}
       {answer && (

@@ -6,19 +6,13 @@ import logging
 import json
 from sqlite3 import OperationalError
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 DB_NAME = "business_data.db"
 SCHEMA_VERSION = 2
 
 def create_connection():
-    """Create a database connection and initialize/migrate the schema."""
     try:
         conn = sqlite3.connect(DB_NAME, detect_types=sqlite3.PARSE_DECLTYPES)
         conn.row_factory = sqlite3.Row
@@ -29,7 +23,6 @@ def create_connection():
         return None
 
 def migrate_database(conn):
-    """Initialize and migrate the database schema incrementally."""
     try:
         with conn:
             conn.execute('''
@@ -38,7 +31,6 @@ def migrate_database(conn):
                     applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
-
             cursor = conn.execute("SELECT MAX(version) as current FROM schema_version")
             current_version = cursor.fetchone()['current'] or 0
             logger.info(f"Current schema version: {current_version}")
@@ -57,10 +49,8 @@ def migrate_database(conn):
                 conn.execute("INSERT INTO schema_version (version) VALUES (1)")
                 logger.info("Applied schema migration to version 1")
 
-            # 🔹 Ensure file_size exists if missing
             column_check = conn.execute("PRAGMA table_info(uploads)").fetchall()
             column_names = [col[1] for col in column_check]
-
             if "file_size" not in column_names:
                 logger.warning("Column 'file_size' is missing in 'uploads'. Adding it now...")
                 conn.execute("ALTER TABLE uploads ADD COLUMN file_size INTEGER")
@@ -86,32 +76,29 @@ def migrate_database(conn):
         raise
 
 def insert_upload(conn, filename, filepath, file_hash=None, metadata=None):
-    """Insert a new upload with optional hash and metadata."""
     try:
-        with conn:
-            cursor = conn.execute("SELECT id FROM uploads WHERE filepath = ?", (filepath,))
-            existing = cursor.fetchone()
+        cursor = conn.execute("SELECT id FROM uploads WHERE filepath = ?", (filepath,))
+        existing = cursor.fetchone()
 
-            if existing:
-                logger.warning(f"File '{filename}' already exists with ID {existing['id']}.")
-                return existing['id']
+        if existing:
+            logger.warning(f"File '{filename}' already exists with ID {existing['id']}.")
+            return existing['id']
 
-            file_size = os.path.getsize(filepath) if os.path.exists(filepath) else None
-            metadata_json = json.dumps(metadata) if metadata else None
-            cursor = conn.execute(
-                "INSERT INTO uploads (filename, filepath, file_size, file_hash, metadata) VALUES (?, ?, ?, ?, ?)",
-                (filename, filepath, file_size, file_hash, metadata_json)
-            )
-            conn.commit()
-            logger.info(f"Inserted file '{filename}' with ID {cursor.lastrowid}")
-            return cursor.lastrowid
+        file_size = os.path.getsize(filepath) if os.path.exists(filepath) else None
+        metadata_json = json.dumps(metadata) if metadata else None
+        cursor = conn.execute(
+            "INSERT INTO uploads (filename, filepath, file_size, file_hash, metadata) VALUES (?, ?, ?, ?, ?)",
+            (filename, filepath, file_size, file_hash, metadata_json)
+        )
+        conn.commit()
+        logger.info(f"Inserted file '{filename}' with ID {cursor.lastrowid}")
+        return cursor.lastrowid
     except Error as e:
         logger.error(f"Error inserting file: {e}")
         conn.rollback()
         return None
 
 if __name__ == "__main__":
-    conn = create_connection()
-    if conn:
-        logger.info("Database initialized successfully.")
-        conn.close()
+    with create_connection() as conn:
+        if conn:
+            logger.info("Database initialized successfully.")

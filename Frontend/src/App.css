@@ -138,6 +138,12 @@ main {
   color: #7f8c8d;
 }
 
+.error {
+  color: #e74c3c;
+  font-weight: 600;
+  margin-top: 10px;
+}
+
 .footer {
   text-align: center;
   padding: 20px;
@@ -158,4 +164,16 @@ main {
 @keyframes fadeIn {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .header {
+    flex-direction: column;
+    padding: 10px 20px;
+  }
+  nav {
+    margin-top: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
 }

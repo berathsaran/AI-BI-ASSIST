@@ -7,20 +7,28 @@ from google.generativeai import GenerativeModel, configure
 from dotenv import load_dotenv
 from werkzeug.utils import secure_filename
 from database import create_connection, insert_upload
+import logging
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Load environment variables
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if not GEMINI_API_KEY:
     raise ValueError("GEMINI_API_KEY not found in environment variables")
 configure(api_key=GEMINI_API_KEY)
 
+# Initialize Flask app
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")  # Default to Vite port
+CORS(app, resources={r"/*": {"origins": FRONTEND_URL}})
 
+# Configure upload settings
 UPLOAD_FOLDER = "uploads"
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
-
+app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB limit
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 SUPPORTED_EXTENSIONS = {".csv", ".json", ".xlsx", ".parquet"}
 
@@ -87,7 +95,6 @@ def get_dataset_summary(data, dtypes):
             column_summary["top_value"] = col_data.mode()[0] if not col_data.empty else "N/A"
         summary["columns"][col] = column_summary
 
-    # Key Takeaways
     if sales_col:
         total_sales = df[sales_col].sum()
         summary["key_takeaways"].append(f"Total {sales_col}: ${total_sales:,.2f}")
@@ -132,6 +139,7 @@ def generate_visualization_suggestions(summary, dtypes):
         response = model.generate_content([prompt])
         suggestions = response.text.split("\n")
     except Exception as e:
+        logger.error(f"Visualization suggestion generation failed: {str(e)}")
         if categorical_cols and sales_col:
             suggestions.append(f"Use a Bar chart for 'Category' vs '{sales_col}'")
             suggestions.append(f"Use a Pie chart for 'Gender' vs '{sales_col}'")
@@ -143,6 +151,16 @@ def generate_visualization_suggestions(summary, dtypes):
         suggestions = [s for s in suggestions if s]
 
     return "\n".join(suggestions) if suggestions else "No suitable columns found for visualizations."
+
+# Root route for health check
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({"message": "Welcome to AI-BI Backend", "status": "running"}), 200
+
+# Error handler for file size limit
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    return jsonify({"error": "File too large. Max size is 16MB."}), 413
 
 @app.route("/upload", methods=["POST"])
 def upload_file():
@@ -160,17 +178,15 @@ def upload_file():
     filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
     file.save(filepath)
 
-    conn = create_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    try:
-        file_id = insert_upload(conn, filename, filepath)
-        conn.close()
-        return jsonify({"message": "File uploaded successfully", "file_id": file_id, "filename": filename})
-    except Exception as e:
-        conn.close()
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    with create_connection() as conn:
+        if conn is None:
+            return jsonify({"error": "Database connection failed"}), 500
+        try:
+            file_id = insert_upload(conn, filename, filepath)
+            return jsonify({"message": "File uploaded successfully", "file_id": file_id, "filename": filename})
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}")
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
 
 @app.route("/ask", methods=["POST"])
 def ask_question():
@@ -181,18 +197,16 @@ def ask_question():
     if not file_id or not question:
         return jsonify({"error": "Missing file_id or question"}), 400
 
-    conn = create_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
-        result = cursor.fetchone()
-        conn.close()
-    except Exception as e:
-        conn.close()
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    with create_connection() as conn:
+        if conn is None:
+            return jsonify({"error": "Database connection failed"}), 500
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
+            result = cursor.fetchone()
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}")
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
 
     if not result:
         return jsonify({"error": "File not found"}), 404
@@ -215,6 +229,7 @@ def ask_question():
         response = model.generate_content([prompt])
         return jsonify({"answer": response.text})
     except Exception as e:
+        logger.error(f"Gemini API failed: {str(e)}")
         question_lower = question.lower()
         numerical_cols = [col for col, dtype in dtypes.items() if "float" in dtype or "int" in dtype and "id" not in col.lower()]
         categorical_cols = [col for col, dtype in dtypes.items() if "object" in dtype or "category" in dtype]
@@ -227,19 +242,9 @@ def ask_question():
             return jsonify({"answer": f"No numerical column found to compute total for '{question}'."}), 200
 
         if "top" in question_lower or "best" in question_lower:
-            target_col = None
-            for word in question_lower.split():
-                for col in df.columns:
-                    if word in col.lower():
-                        target_col = col
-                        break
-                if target_col:
-                    break
-            
+            target_col = next((col for col in df.columns if any(word in col.lower() for word in question_lower.split())), None)
             if not target_col and "sales" in question_lower:
-                target_col = next((col for col in numerical_cols if "sales" in col.lower() or "amount" in col.lower() or "revenue" in col.lower()), None)
-                if not target_col and numerical_cols:
-                    target_col = numerical_cols[0]
+                target_col = next((col for col in numerical_cols if "sales" in col.lower() or "amount" in col.lower() or "revenue" in col.lower()), numerical_cols[0] if numerical_cols else None)
 
             if target_col:
                 if target_col in numerical_cols:
@@ -256,7 +261,7 @@ def ask_question():
                         return jsonify({"answer": f"The most frequent {target_col} is '{top_cat}'."}), 200
             return jsonify({"answer": f"Unable to determine target column for '{question}'."}), 200
 
-        return jsonify({"answer": f"Unable to answer '{question}' due to free API limitations."}), 200
+        return jsonify({"answer": f"AI processing unavailable. Please try again later."}), 200
 
 @app.route("/data/<int:file_id>", methods=["GET"])
 def get_data(file_id):
@@ -266,18 +271,16 @@ def get_data(file_id):
     if page < 1 or per_page < 1:
         return jsonify({"error": "Invalid page or per_page value"}), 400
 
-    conn = create_connection()
-    if conn is None:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    try:
-        cursor = conn.cursor()
-        cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
-        result = cursor.fetchone()
-        conn.close()
-    except Exception as e:
-        conn.close()
-        return jsonify({"error": f"Database error: {str(e)}"}), 500
+    with create_connection() as conn:
+        if conn is None:
+            return jsonify({"error": "Database connection failed"}), 500
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT filepath FROM uploads WHERE id = ?", (file_id,))
+            result = cursor.fetchone()
+        except Exception as e:
+            logger.error(f"Database error: {str(e)}")
+            return jsonify({"error": f"Database error: {str(e)}"}), 500
 
     if not result:
         return jsonify({"error": "File not found"}), 404
